@@ -30,27 +30,55 @@ class Event(object):
 
 class Services(object):
     """
+    Represents all services being monitored.
 
+    @verbiage members
+        A member is a specific service that's being monitored.
+
+    @verbiage process group
+        Some services consist of many processes.
+
+    @param service_list
+        A list of all services to monitor.
     """
 
     def __init__(self, service_list):
         self.service_list = service_list
-        self.group = []
+        self.members = {}
         self.refresh()
 
     def __iter__(self):
-        for i in self.group:
-            yield i
+        for service in self.members:
+            yield self.members[service]
 
-    def refresh(self):
+    def __repr__(self):
+        return 'Services(members={0})'.format(','.join(self.members.keys()))
+
+    def refresh(self, service=None):
         """
-        
+        Iterate over the process table and update our references
+        to processes being monitored.
+
+        @param service
+            If provided, only update that services process group
         """
-        self.group = [x for x in psutil.process_iter() if x.name() in self.service_list]
+        if service:
+            self.members[service] = [x for x in psutil.process_iter() if x.name() == service]
+
+        else:
+            self.members = {k: [] for k in self.service_list}
+            for proc in psutil.process_iter():
+                name = proc.name()
+                if name in self.members:
+                    self.members[name].append(proc)
 
 
-def dispatch(event):
+class Dispatcher(object):
     """
-    Relay a message for an event
     """
-    pass
+
+    def dispatch(self, event):
+        """
+        Relay a message for an event
+        """
+        pass
