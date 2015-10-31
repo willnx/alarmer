@@ -11,7 +11,7 @@ NEW_BUILD_NUM=`expr \`cat build-number.txt\` + 1`
 
 clean:
 	-$(PIP) uninstall -y alarmer
-	-rm *.pyc
+	-find . -name "*.pyc" -exec rm {} +
 	-rm -rf build
 	-rm -rf alarmer.egg-info
 	-rm -rf dist

@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 """
-Derp
+Objects use in the monitoring loop
 """
 from __future__ import print_function, division, unicode_literals
 #TODO add absolute_import
