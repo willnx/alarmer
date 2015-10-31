@@ -6,7 +6,7 @@ from __future__ import print_function, division, unicode_literals
 #TODO add absolute_import
 
 import unittest
-from monitoring import Event
+from alarmer.monitoring import Event
 
 
 class TestEvent(unittest.TestCase):

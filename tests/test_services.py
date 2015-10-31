@@ -8,7 +8,7 @@ from __future__ import print_function, division, unicode_literals
 import unittest2
 import psutil
 
-from monitoring import Services
+from alarmer.monitoring import Services
 
 
 class TestServices(unittest2.TestCase):
