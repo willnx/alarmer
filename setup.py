@@ -16,6 +16,6 @@ setup(name='alarmer',
       packages=find_packages(),
       description='A process monitoring tool',
       url='https://github.com/willnx/alarmer',
-      install_requires=['psutil'],
+      install_requires=['psutil', 'netifaces', 'requests'],
       license='LICENSE.txt',
      )
