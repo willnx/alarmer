@@ -24,9 +24,9 @@ class Event(object):
 
     def __init__(self, name):
         self.name = name
-        birth = time.time()
-        last_event = time.time()
-        event_count = 1
+        self.birth = time.time()
+        self.last_event = time.time()
+        self.event_count = 1
 
     def __repr__(self):
         return 'Event(name={0}, birth={1}, last_event={2}, event_count={3})'.format(self.name,
@@ -192,5 +192,3 @@ class Dispatcher(object):
         TODO
         """
         pass
-
-
