@@ -7,6 +7,7 @@ from __future__ import print_function, division, unicode_literals
 
 
 import sys
+import logging
 import os.path
 import unittest
 import ConfigParser
@@ -67,7 +68,7 @@ class TestConfig(unittest.TestCase):
     def test_get_config_returns(self, mocked_isfile):
         """
         get_config returns an instance of ConfigReader
-        """	
+        """
         mocked_isfile.return_value = True
 
         config = alarmer.config.get_config('test_section')
@@ -79,122 +80,122 @@ class TestConfig(unittest.TestCase):
         NoOptionError is reraised as ConfigParsingError
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.side_effect = ConfigParser.NoOptionError('test', 'test')
+        config._config.grab = MagicMock()
+        config._config.grab.side_effect = ConfigParser.NoOptionError('test', 'test')
 
         self.assertRaises(alarmer.config.ConfigParsingError,
-                          config.get , 'test_item')
+                          config.grab , 'test_item')
 
     def test_config_reader_parse_error2(self):
         """
         NoSectionError is reraised as ConfigParsingError
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.side_effect = ConfigParser.NoSectionError('test')
+        config._config.grab = MagicMock()
+        config._config.grab.side_effect = ConfigParser.NoSectionError('test')
 
         self.assertRaises(alarmer.config.ConfigParsingError,
-                          config.get , 'test_item')
+                          config.grab , 'test_item')
 
     def test_config_reader_get_cast_to_int(self):
         """
-        ConfigReader.get is able to cast to integers
+        ConfigReader.grab is able to cast to integers
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = '1'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = '1'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data is 1)
 
     def test_config_reader_get_cast_to_boolean(self):
         """
-        ConfigReader.get is able to cast to booleans
+        ConfigReader.grab is able to cast to booleans
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'true'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'true'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data is True)
 
     def test_config_reader_get_cast_on_string(self):
         """
-        ConfigReader.get is able to return strings when casting
+        ConfigReader.grab is able to return strings when casting
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'mystring'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'mystring'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data is 'mystring')
 
     def test_config_reader_get_cast_with_func(self):
         """
-        ConfigReader.get doesn't cast functions
+        ConfigReader.grab doesn't cast functions
         """
         def some_func():
             print('failure')
 
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'some_func'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'some_func'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data is 'some_func')
 
     def test_config_reader_get_cast_with_lambda(self):
         """
-        ConfigReader.get doesn't cast lambda functions
+        ConfigReader.grab doesn't cast lambda functions
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'lambda: "failure"'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'lambda: "failure"'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data is 'lambda: "failure"')
 
     def test_config_reader_get_cast_with_class(self):
         """
-        ConfigReader.get doesn't cast classes
+        ConfigReader.grab doesn't cast classes
         """
         class SomeClass(object):
             pass
 
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'SomeClass'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'SomeClass'
 
-        data = config.get('test', cast=True)
+        data = config.grab('test', cast=True)
 
         self.assertTrue(data, 'SomeClass')
 
     def test_config_reader_get_no_cast(self):
         """
-        ConfigReader.get return data when not casting
+        ConfigReader.grab return data when not casting
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'some_value'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'some_value'
 
-        data = config.get('test', cast=False)
+        data = config.grab('test', cast=False)
 
         self.assertTrue(data, 'some_value')
 
     def test_config_reader_get_different_section(self):
         """
-        ConfigReader.get called with a different section supplied
+        ConfigReader.grab called with a different section supplied
         """
         config = alarmer.config.ConfigReader('/some/path', 'test_section')
-        config._config.get = MagicMock()
-        config._config.get.return_value = 'some_value'
+        config._config.grab = MagicMock()
+        config._config.grab.return_value = 'some_value'
 
-        data = config.get('test', section='other_section', cast=False)
+        data = config.grab('test', section='other_section', cast=False)
 
         self.assertTrue(data, 'some_value')
 

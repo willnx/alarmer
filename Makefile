@@ -16,9 +16,13 @@ clean:
 	-rm -rf alarmer.egg-info
 	-rm -rf dist
 
-install: clean
-	python setup.py install
-
 build: clean
 	if ! test -f $(BUILD_NUM_FILE); then echo 1 > $(BUILD_NUM_FILE); fi
 	echo $(NEW_BUILD_NUM) > $(BUILD_NUM_FILE)
+  $(PYTHON) setup.py bdist_wheel
+
+install: build
+	$(PIP) install dist/*.whl
+
+test: install
+	nosestest --with-coverage --package='alarmer'

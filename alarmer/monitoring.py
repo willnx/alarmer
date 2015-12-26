@@ -1,32 +1,58 @@
 # -*- coding: UTF-8 -*-
 """
 Objects use in the monitoring loop
+
+@jargon service
+    Some sort of consumable functionality, generally at a systems level.
+    For example, Apache is a webserver service. PostgreSQL is a database service.
+
+@jargon process
+    A daemon/thread/etc of a service. Must be a unique item within the process
+    table, and addressable via a PID (process ID).
 """
-from __future__ import print_function, division, unicode_literals
-#TODO add absolute_import
+from __future__ import print_function, division, unicode_literals, absolute_import
 
 import time
 import datetime
 import smtplib
 from email.mime.text import MIMEText
+from multiprocessing import Process
 
 import psutil
 import requests
 from netifaces import interfaces, ifaddresses, AF_INET
 
-from config import get_config
-
 
 class Event(object):
     """
-    Represents a change in state for a monitored process
-    """
+    Represents a change in state for a monitored service & process.
 
-    def __init__(self, name):
-        self.name = name
+    Manipulates how Python checks for equality and changes expected behavior of
+    inserting into a dictionary.
+    """
+    def __init__(self, service, process, pid):
+        self._service = service
+        self._process = process
+        self._pid = [pid]
         self.birth = time.time()
         self.last_event = time.time()
         self.event_count = 1
+
+    @property
+    def pid(self):
+        return self._pid
+
+    @property
+    def name(self):
+        return '{0} -> {1}'.format(self._service, self._name)
+
+    def bump(self, pid):
+        """
+        Update the Event to account for a re-occurance; i.e. "it happened again"
+        """
+        self.event_count += 1
+        self._pid.append(pid)
+        self.last_event = time.time()
 
     def __repr__(self):
         return 'Event(name={0}, birth={1}, last_event={2}, event_count={3})'.format(self.name,
@@ -34,68 +60,122 @@ class Event(object):
                                                                                     self.last_event,
                                                                                     self.event_count)
 
+    def __hash__(self):
+        """
+        Allows us to create a new Event instance that has the same hash as an
+        existing Event instance; really handy for tracking events in a dictionary.
+        """
+        return hash(self._service) ^ hash(self._process)
 
-class Services(object):
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+
+class Service(object):
     """
-    Represents all services being monitored.
+    Represents a monitored service; can consist of many processes.
+    Calling for a process as an attribute returns the last known valid PID of that
+    process.
 
-    @verbiage members
-        A member is a specific service that's being monitored.
+    @param name
+        The name of the service
 
-    @verbiage process group
-        Some services consist of many processes.
+    @param processes
+        The names of all processes that makeup this service. Expected input is
+        an iterable where each value returned is the string name of a process.
+        Examples::
+          list  -> ['my_process', 'other_process']
+          tuple -> ('my_process', 'other_process')
 
-    @param service_list
-        A list of all services to monitor.
+        What not to input::
+           string -> 'my_process' ; this iterates as 'm', 'y', '_', 'p', 'r', 'o', 'c', 'e', 's', 's'
     """
 
-    def __init__(self, service_list):
-        self.service_list = service_list
-        self.members = {}
-        self.refresh()
-
-    def __iter__(self):
-        for service in self.members:
-            yield self.members[service]
+    def __init__(self, name, processes=None):
+        if isinstance(process, str):
+            raise ValueError('processes param cannot be string, must be iterable like list, tuple, etc')
+        self._name = name
+        self._procs = { k:set() for k in procs }
+        self.status()
 
     def __repr__(self):
-        return 'Services(members={0})'.format(','.join(self.members.keys()))
+        return 'Service(name={0}, processes={1})'.format(self.name, ','.join(self.processes))
 
-    def refresh(self, service=None):
+    def __len__(self):
+        """How many processes are tracked by this Service"""
+        return len(self._procs)
+
+    def __iter__(self):
+        """Iterate over the psutil.Process objects"""
+        for proc in self._procs:
+            yield proc
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def processes(self):
+        return self._procs.keys()
+
+    def __getattr__(self, attr):
+        """Enables users to get a list of pids for a process name"""
+        return list(self._procs[attr])
+
+    def _find(self):
         """
-        Iterate over the process table and update our references
-        to processes being monitored.
+        Obtain current data about monitored processes
 
-        @param service
-            If provided, only update that services process group
+        -Returns- Dictionary
+            Key   -> name of process
+            Value -> set of psutil.Process objects
         """
-        if service:
-            self.members[service] = [x for x in psutil.process_iter() if x.name() == service]
+        info = dict.fromkeys(self._procs, set())
+        for proc in psutil.process_iter():
+            try:
+                proc_name = proc.name()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            else:
+                if proc_name in info:
+                    info[proc_name].add(proc)
 
-        else:
-            self.members = {k: [] for k in self.service_list}
-            for proc in psutil.process_iter():
-                name = proc.name()
-                if name in self.members:
-                    self.members[name].append(proc)
+        return info
+
+    def status(self):
+        """
+        Compairs the current state of the process table with known data about
+        the service from the last check of the process table.
+
+        **Note** Mutates state of object by updating PID info for processes
+
+        -Return- Tuple
+           index[0] -> dictionary mapping process name to new pids
+           index[1] -> dictionary mapping process name to dead pids
+        """
+        current = self._find()
+        new_pids = {}
+        dead_pids = {}
+        for name in current:
+            new = current[name] - self._proc[name]
+            new_pids[name] = [x.pid for x in new]
+            self._procs[name] = self._proc[name] | current[name] # Union between both sets
+
+        for name in self._procs:
+            for proc in self._procs[name]:
+                if not proc.is_running():
+                    group = dead_pids.setdefaults(name, [])
+                    group.append(proc.pid)
+                    self._procs[name].remove(proc)
+
+        return new_pids, dead_pids
 
 
-class Dispatcher(object):
+class Dispatcher(Process):
     """
     Encapsulates taking an event and notifying someone about it.
-
-    @param config_file
-        The absolute file system location of the configuration file
-
-    @param logger
-        A Python logger object
     """
-
-    def __init__(self, config_file, logger):
-        self.config = get_config('dispatcher')
-        self.log = logger
-        self.email_on = self.config.get('enable_email')
-        self.local_ips = {}
+    local_ips = {}
 
     @staticmethod
     def _find_ipaddrs():
@@ -144,24 +224,45 @@ class Dispatcher(object):
         """Turns EPOC time into human time"""
         return datetime.datetime.formtimestamp(int(time_val)).strftime('%Y-%m-%d %H:%M:%S')
 
-    def send(self, event):
+    def run(self, config, logger, pipe):
         """
-        Relay a message for an event
+        Loop for new events to notify about
 
-        @param event
+        @param config
+            An instance of the ConfigReader object
+
+        @param logger
+            A Python logger object
+
+        @param pipe
             An instantiated Event object
         """
-        msg = self._format_msg(event)
+        self.config = config
+        self.log = logger
+        alerts = []
+        while True:
+            if pipe.poll():
+                # if there's something in the pipe, pull everything out of it
+                # prevents periodic alerting from blocking the monitoring loop
+                while pipe.poll():
+                    tmp = pipe.recv()
+                    alerts.append(tmp)
 
-        if self.email_on:
-            self._send_email(msg, event.name)
+                for event in alerts:
+                    msg = self._format_msg(event)
 
-        if self.slack_on:
-            self._send_slack(msg, event.name)
+                    if self.email_on:
+                        self._send_email(msg, event.name)
 
-        if not (self.email_on or self.slack_on):
-            msg = 'Unable to send event for {0} because all notifications are disabled'
-            self.log.error(msg)
+                    if self.slack_on:
+                        self._send_slack(msg, event.name)
+
+                    if not (self.email_on or self.slack_on):
+                        msg = 'Unable to send event for {0} because all notifications are disabled'
+                        self.log.error(msg)
+                alerts = []
+            else:
+                time.sleep(0.5)
 
     def _send_email(self, msg, event_name):
         """
@@ -179,10 +280,10 @@ class Dispatcher(object):
         email = MIMEText(msg)
         email['Subject'] = 'Alarmer Event for {0}'.format(event_name)
         email['From'] = 'NoReply'
-        email['To'] = self.config.get('email_to'.split(','))
+        email['To'] = self.config.grab('email_to'.split(','))
 
-        host = self.config.get('email_server_host')
-        port = self.config.get('email_server_port')
+        host = self.config.grab('email_server_host')
+        port = self.config.grab('email_server_port')
         mail_server = smtplib.SMTP(host, port)
         mail_server.sendmail(email.as_string())
         mail_server.quit()
